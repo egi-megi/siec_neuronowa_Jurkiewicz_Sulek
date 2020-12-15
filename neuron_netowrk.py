@@ -25,3 +25,11 @@ def load_dataset(flatten=False):
         return X_train, y_train, X_val, y_val, X_test, y_train, X_val, y_val, X_test, y_test
     ## Printing dimensions
     print(X_train.shape, y_train.shape)
+
+
+# now declare the weights connecting the input to the hidden layer
+W1 = tf.Variable(tf.random.normal([1, 10], stddev=0.03), name='W1')
+b1 = tf.Variable(tf.random.normal([10]), name='b1')
+# and the weights connecting the hidden layer to the output layer
+W2 = tf.Variable(tf.random.normal([10, 1], stddev=0.03), name='W2')
+b2 = tf.Variable(tf.random.normal([1]), name='b2')
