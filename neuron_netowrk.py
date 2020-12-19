@@ -28,12 +28,12 @@ def get_compiled_model():
 
 
 def load_dataset(flatten=False):
-    train = pd.read_csv('dataset_10000.csv',  names=["x1", "x2", "y"])
+    train = pd.read_csv('dataset_100000.csv',  names=["x1", "x2", "y"])
     y_train = train.pop("y")
-    test = pd.read_csv('dataset_10000.csv', names=["x1", "x2", "y"])
+    test = pd.read_csv('dataset_100000.csv', names=["x1", "x2", "y"])
     # we reserve the last 1000 training examples for validation
-    train, val = train[:-1000], train[-1000:]
-    y_train, y_val = y_train[:-1000], y_train[-1000:]
+    train, val = train[:-10000], train[-10000:]
+    y_train, y_val = y_train[:-10000], y_train[-10000:]
     if flatten:
         #x_train = x_train.reshape([x_train.shape[0], -1])
         x_val = val.reshape([val.shape[0], -1])
@@ -48,7 +48,7 @@ def load_dataset(flatten=False):
     train_dataset = dataset.shuffle(len(train)).batch(1)
 
     model = get_compiled_model()
-    model.fit(train_dataset, epochs=100, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
+    model.fit(train_dataset, epochs=400, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -68,7 +68,7 @@ def load_dataset(flatten=False):
     surf = ax.plot_surface(X, Y, Z, cmap=cm.autumn,
                            linewidth=0, antialiased=False)
     # Customize the z axis.
-    ax.set_zlim(-2, 2)
+    ax.set_zlim(-4, 4)
     ax.elev = 10
     ax.zaxis.set_major_locator(LinearLocator(10))
     ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
