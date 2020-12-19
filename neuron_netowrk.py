@@ -7,27 +7,32 @@ from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 
-def get_compiled_model():
+def get_compiled_model(activation_method):
+    model = tf.keras.Sequential([
+        tf.keras.layers.Dense(1000, activation=activation_method, kernel_initializer=tf.keras.initializers.ones, input_shape=(2,)),
+        # tf.keras.layers.Dense(150, activation=activation_method, kernel_initializer=tf.keras.initializers.ones),
+        # tf.keras.layers.Dense(25, activation=activation_method),
+        # tf.keras.layers.Dense(25, activation=activation_method),
+        # tf.keras.layers.Dense(25, activation=activation_method),
+        # tf.keras.layers.Dense(25, activation=activation_method),
+        # tf.keras.layers.Dense(25, activation=activation_method),
+        # tf.keras.layers.Dense(25, activation=activation_method),
+        tf.keras.layers.Dense(1, activation=tf.keras.activations.linear)
+    ])
 
-  model = tf.keras.Sequential([
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(1)
-  ])
-
-  model.compile(optimizer='adam',
+    model.compile(optimizer='adam',
                 loss=['MeanSquaredError'],
                 metrics=['MeanSquaredError'])
-  return model
+    return model
 
 
 def load_dataset(flatten=False):
+    ACTIVATION_METHOD = tf.keras.activations.sigmoid
+    EPOCHS = 300
+
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
     train = pd.read_csv('dataset_100000.csv',  names=["x1", "x2", "y"])
     y_train = train.pop("y")
     test = pd.read_csv('dataset_100000.csv', names=["x1", "x2", "y"])
@@ -47,8 +52,8 @@ def load_dataset(flatten=False):
         print('Features: {}, Target: {}'.format(feat, targ))
     train_dataset = dataset.shuffle(len(train)).batch(1)
 
-    model = get_compiled_model()
-    model.fit(train_dataset, epochs=400, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
+    model = get_compiled_model(ACTIVATION_METHOD)
+    history = model.fit(train_dataset, epochs=EPOCHS, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -75,6 +80,16 @@ def load_dataset(flatten=False):
     # Add a color bar which maps values to colors.
     fig.colorbar(surf, shrink=0.5, aspect=5)
     plt.savefig('3d_plot_out_of_nn.pdf')
+    plt.show()
+
+    print(history.history.keys())
+
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper right')
     plt.show()
 
 
