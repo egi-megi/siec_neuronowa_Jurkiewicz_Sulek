@@ -5,51 +5,44 @@ import pandas as pd
 import csv
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
-
+import json
+from tensorflow.keras.regularizers import l2
 
 def get_compiled_model():
-
-  model = tf.keras.Sequential([
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(25, activation='swish'),
-    tf.keras.layers.Dense(1)
-  ])
-
-  model.compile(optimizer='adam',
-                loss=['MeanSquaredError'],
-                metrics=['MeanSquaredError'])
-  return model
+    model = tf.keras.Sequential([
+        tf.keras.layers.Dense(100, activation='swish', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(100, activation='swish', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(1)
+    ])
+    opt = tf.keras.optimizers.Adam(learning_rate=0.001)
+    model.compile(optimizer=opt,
+                  loss=['MeanSquaredError'],
+                  metrics=['MeanSquaredError'])
+    return model, opt
 
 
 def load_dataset(flatten=False):
-    train = pd.read_csv('dataset_100000.csv',  names=["x1", "x2", "y"])
+    val_dataset_numb = 10000
+    train = pd.read_csv('dataset/dataset_100000.csv', names=["x1", "x2", "y"])
     y_train = train.pop("y")
-    test = pd.read_csv('dataset_100000.csv', names=["x1", "x2", "y"])
-    # we reserve the last 1000 training examples for validation
-    train, val = train[:-10000], train[-10000:]
-    y_train, y_val = y_train[:-10000], y_train[-10000:]
+    test = pd.read_csv('dataset/dataset_100000.csv', names=["x1", "x2", "y"])
+    train, val = train[:-val_dataset_numb], train[-val_dataset_numb:]
+    y_train, y_val = y_train[:-val_dataset_numb], y_train[-val_dataset_numb:]
     if flatten:
-        #x_train = x_train.reshape([x_train.shape[0], -1])
         x_val = val.reshape([val.shape[0], -1])
-        #x_test = x_test.reshape([x_test.shape[0], -1])
-        #return x_train, y_train, x_val, y_val, x_test, y_train, x_val, y_val, x_test, y_test
     ## Printing dimensions
     print(train.dtypes)
     print(train.shape, y_train.shape)
     dataset = tf.data.Dataset.from_tensor_slices((train.values.reshape([len(train), 2]), y_train.values))
     for feat, targ in dataset.take(5):
         print('Features: {}, Target: {}'.format(feat, targ))
-    train_dataset = dataset.shuffle(len(train)).batch(1)
+    train_dataset = dataset.shuffle(len(train)).batch(10)
 
-    model = get_compiled_model()
-    model.fit(train_dataset, epochs=400, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
-
+    model, opt = get_compiled_model()
+    hist = model.fit(train_dataset, epochs=50, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
+    print(hist.history)
+    with open("out/losses_2layers_100neurons_100000dataset_swish.json", "w") as f:
+        json.dump(hist.history, f)
     fig = plt.figure()
     ax = fig.gca(projection='3d')
 
@@ -60,10 +53,8 @@ def load_dataset(flatten=False):
     grid = np.stack((X, Y))
     grid = grid.T.reshape(-1, 2)
 
-
     outs = model.predict(grid)
     Z = outs.T[0].reshape(X.shape[0], X.shape[0])
-    #    np.sin(0.5 * X + Y) * np.exp(-(2 * X * X + 2 * Y * Y) / 100) * 2 + np.cos((X + Y) * 0.5)
     # Plot the surface.
     surf = ax.plot_surface(X, Y, Z, cmap=cm.autumn,
                            linewidth=0, antialiased=False)
@@ -76,6 +67,3 @@ def load_dataset(flatten=False):
     fig.colorbar(surf, shrink=0.5, aspect=5)
     plt.savefig('3d_plot_out_of_nn.pdf')
     plt.show()
-
-
-
