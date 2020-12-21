@@ -10,8 +10,8 @@ from tensorflow.keras.regularizers import l2
 
 def get_compiled_model():
     model = tf.keras.Sequential([
-        tf.keras.layers.Dense(100, activation='swish', kernel_regularizer=l2(1e-5)),
-        tf.keras.layers.Dense(100, activation='swish', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(100, activation='selu', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(100, activation='selu', kernel_regularizer=l2(1e-5)),
         tf.keras.layers.Dense(1)
     ])
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
@@ -41,7 +41,7 @@ def load_dataset(flatten=False):
     model, opt = get_compiled_model()
     hist = model.fit(train_dataset, epochs=50, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
     print(hist.history)
-    with open("out/losses_2layers_100neurons_100000dataset_swish.json", "w") as f:
+    with open("out/losses_2layers_100neurons_100000dataset_selu.json", "w") as f:
         json.dump(hist.history, f)
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -65,5 +65,5 @@ def load_dataset(flatten=False):
     ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
     # Add a color bar which maps values to colors.
     fig.colorbar(surf, shrink=0.5, aspect=5)
-    plt.savefig('3d_plot_out_of_nn.pdf')
+    plt.savefig('3d_plot_out_of_nn_selu.pdf')
     plt.show()
