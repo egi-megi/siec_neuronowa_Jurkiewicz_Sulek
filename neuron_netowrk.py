@@ -10,9 +10,9 @@ from tensorflow.keras.regularizers import l2
 
 def get_compiled_model():
     model = tf.keras.Sequential([
-        tf.keras.layers.Dense(100, activation='sigmoid', kernel_regularizer=l2(1e-5)),
-        tf.keras.layers.Dense(100, activation='sigmoid', kernel_regularizer=l2(1e-5)),
-        tf.keras.layers.Dense(1)
+        tf.keras.layers.Dense(100, activation='sigmoid', kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
+        tf.keras.layers.Dense(100, activation='sigmoid', kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
+        tf.keras.layers.Dense(1, activation=tf.keras.activations.linear, kernel_initializer=tf.keras.initializers.ones)
     ])
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
     model.compile(optimizer=opt,
