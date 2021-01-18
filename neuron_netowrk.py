@@ -7,11 +7,12 @@ from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import json
 from tensorflow.keras.regularizers import l2
+from sklearn.model_selection import KFold
 
 def get_compiled_model():
     model = tf.keras.Sequential([
-        tf.keras.layers.Dense(100, activation='sigmoid', kernel_regularizer=l2(1e-5)),
-        tf.keras.layers.Dense(100, activation='sigmoid', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(4, activation='sigmoid', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(4, activation='sigmoid', kernel_regularizer=l2(1e-5)),
         tf.keras.layers.Dense(1)
     ])
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
@@ -20,29 +21,7 @@ def get_compiled_model():
                   metrics=['MeanSquaredError'])
     return model, opt
 
-
-def load_dataset(flatten=False):
-    val_dataset_numb = 10000
-    train = pd.read_csv('dataset/dataset_100000.csv', names=["x1", "x2", "y"])
-    y_train = train.pop("y")
-    test = pd.read_csv('dataset/dataset_100000.csv', names=["x1", "x2", "y"])
-    train, val = train[:-val_dataset_numb], train[-val_dataset_numb:]
-    y_train, y_val = y_train[:-val_dataset_numb], y_train[-val_dataset_numb:]
-    if flatten:
-        x_val = val.reshape([val.shape[0], -1])
-    ## Printing dimensions
-    print(train.dtypes)
-    print(train.shape, y_train.shape)
-    dataset = tf.data.Dataset.from_tensor_slices((train.values.reshape([len(train), 2]), y_train.values))
-    for feat, targ in dataset.take(5):
-        print('Features: {}, Target: {}'.format(feat, targ))
-    train_dataset = dataset.shuffle(len(train)).batch(10)
-
-    model, opt = get_compiled_model()
-    hist = model.fit(train_dataset, epochs=50, validation_data=(val.values.reshape([len(val), 2]), y_val.values))
-    print(hist.history)
-    with open("out/losses_2layers_100neurons_100000dataset_sigmoid.json", "w") as f:
-        json.dump(hist.history, f)
+def draw_plot(model):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
 
@@ -65,5 +44,44 @@ def load_dataset(flatten=False):
     ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
     # Add a color bar which maps values to colors.
     fig.colorbar(surf, shrink=0.5, aspect=5)
-    plt.savefig('3d_plot_out_of_nn_sigmoid.pdf')
+    plt.savefig('3d_plot_out_of_nn_sigmoid_proba.pdf')
     plt.show()
+
+def read_dataset():
+    test_dataset_numb = 20000
+    dataset = pd.read_csv('dataset/dataset_100000.csv', names=["x1", "x2", "y"])
+    y_dataset = dataset.pop("y")
+    x_train, x_test = dataset[:-test_dataset_numb], dataset[-test_dataset_numb:]
+    y_train, y_test = y_dataset[:-test_dataset_numb], y_dataset[-test_dataset_numb:]
+    return x_train, x_test, y_train, y_test
+
+def make_model():
+
+    x_train, x_test, y_train, y_test = read_dataset()
+
+
+    ## Printing dimensions
+    print(x_train.dtypes)
+    print(x_train.shape, y_train.shape)
+
+    ## Make corss validtion
+    n_split = 10
+    for train_index, val_index in KFold(n_split).split(x_train, y_train):
+        ##x_train_cv, x_val_cv = x_train[train_index], x_train[val_index]
+        y_train_cv, y_val_cv = y_train[train_index], y_train[val_index]
+        ##print(x_train_cv.shape, y_train_cv.shape)
+
+
+    dataset = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2]), y_train.values))
+    for feat, targ in dataset.take(5):
+        print('Features: {}, Target: {}'.format(feat, targ))
+    train_dataset = dataset.shuffle(len(x_train)).batch(10)
+
+    model, opt = get_compiled_model()
+    hist = model.fit(train_dataset, epochs=5, validation_data=(x_test.values.reshape([len(x_test), 2]), y_test.values))
+    print(hist.history)
+    with open("out/losses_2layers_100neurons_100000dataset_sigmoid_proba.json", "w") as f:
+        json.dump(hist.history, f)
+    draw_plot(model)
+
+

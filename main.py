@@ -1,11 +1,11 @@
-from neuron_netowrk import load_dataset
+from neuron_netowrk import make_model
 #from RBF_model import *
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     #for neuron_network
-    load_dataset()
+    make_model()
 
 
     #
