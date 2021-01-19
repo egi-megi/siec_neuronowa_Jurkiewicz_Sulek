@@ -9,12 +9,15 @@ import json
 from tensorflow.keras.regularizers import l2
 from sklearn.model_selection import KFold
 
-def get_compiled_model():
+def get_compiled_model(no_first_layer):
+
     model = tf.keras.Sequential([
-        tf.keras.layers.Dense(4, activation='sigmoid', kernel_regularizer=l2(1e-5)),
-        tf.keras.layers.Dense(4, activation='sigmoid', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(no_first_layer, activation='sigmoid', kernel_regularizer=l2(1e-5)),
+        tf.keras.layers.Dense(no_first_layer, activation='sigmoid', kernel_regularizer=l2(1e-5)),
         tf.keras.layers.Dense(1)
     ])
+    print(no_first_layer)
+
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
     model.compile(optimizer=opt,
                   loss=['MeanSquaredError'],
@@ -59,9 +62,9 @@ def make_model():
 
     x_train, x_test, y_train, y_test = read_dataset()
 
-    num_folds = 10
+    num_folds = 5
     no_batch_size = 100
-    no_epochs = 1
+    no_epochs = 2
     verbosity = 1
 
 
@@ -78,32 +81,37 @@ def make_model():
     # K-fold Cross Validation model evaluation
     fold_no = 1
     for train, test in kfold.split(x_train.values):
-        model, opt = get_compiled_model()
+        for no_first_layer_neurons in range(2,4):
+            model, opt = get_compiled_model(2)
 
-        # Generate a print
-        print('------------------------------------------------------------------------')
-        print(f'Training for fold {fold_no} ...')
-        input= tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[train,:],y_train.values[train]))
-        print((x_train.values.reshape([len(x_train), 2])[train,:].shape))
-        print(y_train.values[train].shape)
-        train_dataset = input.shuffle(len(y_train.values[train])).batch(no_batch_size)
-        for feat, targ in input.take(5):
-            print('Features: {}, Target: {}'.format(feat, targ))
-        # Fit data to model
-        history = model.fit(train_dataset,
-                            epochs=no_epochs,
-                            verbose=verbosity)
+            # Generate a print
+            print('------------------------------------------------------------------------')
+            print(f'Training for fold {fold_no} ...')
+            input= tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[train,:],y_train.values[train]))
+            print((x_train.values.reshape([len(x_train), 2])[train,:].shape))
+            print(y_train.values[train].shape)
+            train_dataset = input.shuffle(len(y_train.values[train])).batch(no_batch_size)
+            for feat, targ in input.take(5):
+                print('Features: {}, Target: {}'.format(feat, targ))
+            # Fit data to model
+            history = model.fit(train_dataset,
+                                epochs=no_epochs,
+                                verbose=verbosity)
 
-        # Generate generalization metrics
-        input = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[test,:],
+            # Generate generalization metrics
+            input = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[test,:],
                                                    y_train.values[test]))
-        test_dataset=input.shuffle(len(y_train.values[test])).batch(no_batch_size)
-        scores = model.evaluate(test_dataset, verbose=0)
-        print(
-            f'Score for fold {fold_no}: {model.metrics_names[0]} of {scores[0]}; {model.metrics_names[1]} of {scores[1] * 100}%')
+            test_dataset=input.shuffle(len(y_train.values[test])).batch(no_batch_size)
+            scores = model.evaluate(test_dataset, verbose=0)
+            print(
+                f'Score for fold {fold_no}: {model.metrics_names[0]} of {scores[0]}; {model.metrics_names[1]} of {scores[1] * 100}%')
+            with open("out/losses_2layers_100neurons_100000dataset_sigmoid_test.json", "a") as f:
+                json.dump(scores, f)
 
-        # Increase fold number
-        fold_no = fold_no + 1
+            # Increase fold number
+            fold_no = fold_no + 1
+
+
 
     # dataset = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2]), y_train.values))
     #for feat, targ in dataset.take(5):
