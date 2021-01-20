@@ -8,6 +8,61 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import json
 from tensorflow.keras.regularizers import l2
 from sklearn.model_selection import KFold
+import os
+
+def make_training(no_of_layers, activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2, no_neurons_in_layer_2):
+
+    x_train, x_test, y_train, y_test = read_dataset()
+
+    num_folds = 2
+    no_batch_size = 100000
+    no_epochs = 1
+    verbosity = 1
+
+    # Define the K-fold Cross Validator
+    kfold = KFold(n_splits=num_folds, shuffle=True)
+
+    file_name = str(no_of_layers) + "_" \
+                + activation_fun_names_layer_1 + "_" + str(no_neurons_in_layer_1) + "_" + \
+                activation_fun_names_layer_2 + "_" + str(no_neurons_in_layer_2) + ".csv"
+    fold_no = 1
+    val_loss = []
+    no_epochs_for_each_kfold = []
+
+    # K-fold Cross Validation model evaluation
+    for train, valid in kfold.split(x_train.values):
+
+        model, opt = get_compiled_model(no_of_layers, activation_fun_names_layer_1, no_neurons_in_layer_1,
+                                        activation_fun_names_layer_2, no_neurons_in_layer_2)
+
+        # Generate a print
+        print('------------------------------------------------------------------------')
+        print(f'Training for fold {fold_no} ...')
+
+        input_train = tf.data.Dataset.from_tensor_slices(
+            (x_train.values.reshape([len(x_train), 2])[train, :], y_train.values[train]))
+
+        train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
+
+        # Fit data to model
+        history = model.fit(train_dataset,
+                            epochs=no_epochs,
+                            verbose=verbosity)
+
+        # Generate generalization metrics
+        input_valid = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[valid, :],
+                                                    y_train.values[valid]))
+        test_dataset = input_valid.shuffle(len(y_train.values[valid])).batch(no_batch_size)
+        scores = model.evaluate(test_dataset, verbose=0)
+        print(
+            f'Score for fold {fold_no}: {model.metrics_names[0]} of {scores[0]}')
+        val_loss.append([scores[0]])
+        no_epochs_for_each_kfold.append(no_epochs)
+        # Increase fold number
+        fold_no = fold_no + 1
+
+    print(val_loss)
+    write_to_csv(file_name, val_loss, no_of_layers)
 
 def get_compiled_model(no_of_layers, activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2, no_neurons_in_layer_2):
 
@@ -31,6 +86,24 @@ def get_compiled_model(no_of_layers, activation_fun_names_layer_1, no_neurons_in
                   loss=['MeanSquaredError'],
                   metrics=['MeanSquaredError'])
     return model, opt
+
+def write_to_csv(file_name, val_loss, no_of_layers):
+
+    path_no_layer = ""
+
+    if no_of_layers == 1:
+        path_no_layer = "one/"
+    else:
+        path_no_layer = "two/"
+
+    if not os.path.exists("out/" + path_no_layer):
+        os.makedirs("out/" + path_no_layer)
+
+    with open("out/" + path_no_layer + file_name, 'a', newline='',
+                  encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(val_loss)
+
 
 def draw_plot(model):
     fig = plt.figure()
@@ -68,94 +141,16 @@ def read_dataset():
 
 def make_model():
 
-    x_train, x_test, y_train, y_test = read_dataset()
-
-    num_folds = 2
-    no_batch_size = 100000
-    no_epochs = 1
-    verbosity = 1
     activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
     no_neurons_in_layer = [1, 2]
-
-
-    ## Printing dimensions
-    print(x_train.dtypes)
-    print(x_train.shape, y_train.shape)
-
-    #input_x = tf.data.Dataset.from_tensor_slices(x_train.values.reshape([len(x_train), 2]))
-    #input_y = tf.data.Dataset.from_tensor_slices(y_train.values)
-
-    # Define the K-fold Cross Validator
-    kfold = KFold(n_splits=num_folds, shuffle=True)
 
     for no_of_layers in range(1,3):
         for activation_fun_names_layer_1 in activation_fun_names:
             for activation_fun_names_layer_2 in activation_fun_names:
                 for no_neurons_in_layer_1 in no_neurons_in_layer:
                     for no_neurons_in_layer_2 in no_neurons_in_layer:
-                        fold_no = 1
-                        val_loss = []
-                        no_epochs_loss = []
+                        make_training(no_of_layers, activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2, no_neurons_in_layer_2)
 
-                        # K-fold Cross Validation model evaluation
-                        for train, test in kfold.split(x_train.values):
-                            #print(no_first_layer_neurons)
-                            #print(activation_fun_names_layer_1)
-                            #print(activation_fun_names_layer_2)
-                            model, opt = get_compiled_model(no_of_layers, activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2, no_neurons_in_layer_2)
 
-                            # Generate a print
-                            print('------------------------------------------------------------------------')
-                            print(f'Training for fold {fold_no} ...')
-
-                            input= tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[train,:],y_train.values[train]))
-
-                            print((x_train.values.reshape([len(x_train), 2])[train,:].shape))
-                            print(y_train.values[train].shape)
-
-                            train_dataset = input.shuffle(len(y_train.values[train])).batch(no_batch_size)
-
-                            for feat, targ in input.take(1):
-                                print('Features: {}, Target: {}'.format(feat, targ))
-                            # Fit data to model
-                            history = model.fit(train_dataset,
-                                                epochs=no_epochs,
-                                                verbose=verbosity)
-
-                            # Generate generalization metrics
-                            input = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[test,:],
-                                                                   y_train.values[test]))
-                            test_dataset=input.shuffle(len(y_train.values[test])).batch(no_batch_size)
-                            scores = model.evaluate(test_dataset, verbose=0)
-                            print(
-                                f'Score for fold {fold_no}: {model.metrics_names[0]} of {scores[0]}; {model.metrics_names[1]} of {scores[1] * 100}%')
-                            with open("out/losses_2layers_100neurons_100000dataset_sigmoid_test.json", "a") as f:
-                                json.dump(scores, f)
-                                val_loss.append([scores[0]])
-                            #with open('out/losses_2layers_100neurons_100000dataset_sigmoid_test.csv', 'a', newline='', encoding='utf-8') as csvfile:
-                             #   writer = csv.writer(csvfile)
-                              #  writer.writerows(scores[0])
-
-                            # Increase fold number
-                            fold_no = fold_no + 1
-
-                    print(val_loss)
-                    with open('out/losses_2layers_100neurons_100000dataset_sigmoid_test.csv', 'a', newline='',
-                              encoding='utf-8') as csvfile:
-                        writer = csv.writer(csvfile)
-                        writer.writerows(val_loss)
-                        writer.writerows(val_loss)
-
-                # dataset = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2]), y_train.values))
-                #for feat, targ in dataset.take(5):
-                #    print('Features: {}, Target: {}'.format(feat, targ))
-                #train_dataset = dataset.shuffle(len(x_train)).batch(10)
-
-                    #model, opt = get_compiled_model()
-                    #hist = model.fit(train_dataset, epochs=5, validation_data=(x_test.values.reshape([len(x_test), 2]), y_test.values))
-                    #print(hist.history)
-                    #with open("out/losses_2layers_100neurons_100000dataset_sigmoid_proba.json", "w") as f:
-                    #    json.dump(hist.history, f)
-                    #draw_plot(model)
 
 
