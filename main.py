@@ -5,7 +5,8 @@ from neuron_netowrk import make_model
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     #for neuron_network
-    make_model()
+    dataset_without_noise = "dataset/dataset_100000.csv"
+    make_model(dataset_without_noise)
 
 
     #
