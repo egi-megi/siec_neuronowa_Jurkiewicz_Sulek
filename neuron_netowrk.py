@@ -14,10 +14,13 @@ def make_training(no_of_layers, activation_fun_names_layer_1, no_neurons_in_laye
 
     x_train, x_test, y_train, y_test = read_dataset()
 
-    num_folds = 2
+    num_folds = 3
     no_batch_size = 100000
-    no_epochs = 1
+    no_epochs = 200
     verbosity = 1
+    fold_no = 1
+    val_loss = []
+    no_epochs_for_each_kfold = []
 
     # Define the K-fold Cross Validator
     kfold = KFold(n_splits=num_folds, shuffle=True)
@@ -25,9 +28,6 @@ def make_training(no_of_layers, activation_fun_names_layer_1, no_neurons_in_laye
     file_name = str(no_of_layers) + "_" \
                 + activation_fun_names_layer_1 + "_" + str(no_neurons_in_layer_1) + "_" + \
                 activation_fun_names_layer_2 + "_" + str(no_neurons_in_layer_2) + ".csv"
-    fold_no = 1
-    val_loss = []
-    no_epochs_for_each_kfold = []
 
     # K-fold Cross Validation model evaluation
     for train, valid in kfold.split(x_train.values):
@@ -44,10 +44,13 @@ def make_training(no_of_layers, activation_fun_names_layer_1, no_neurons_in_laye
 
         train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
 
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3)
         # Fit data to model
         history = model.fit(train_dataset,
-                            epochs=no_epochs,
+                            epochs=no_epochs, callbacks=[callback],
                             verbose=verbosity)
+
+        #val_loss.append([len(history.history['loss'])])
 
         # Generate generalization metrics
         input_valid = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[valid, :],
@@ -56,12 +59,12 @@ def make_training(no_of_layers, activation_fun_names_layer_1, no_neurons_in_laye
         scores = model.evaluate(test_dataset, verbose=0)
         print(
             f'Score for fold {fold_no}: {model.metrics_names[0]} of {scores[0]}')
-        val_loss.append([scores[0]])
-        no_epochs_for_each_kfold.append(no_epochs)
+        val_loss.append([scores[0], len(history.history['loss'])])
+
         # Increase fold number
         fold_no = fold_no + 1
 
-    print(val_loss)
+        print(val_loss)
     write_to_csv(file_name, val_loss, no_of_layers)
 
 def get_compiled_model(no_of_layers, activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2, no_neurons_in_layer_2):
@@ -141,10 +144,11 @@ def read_dataset():
 
 def make_model():
 
-    activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
-    no_neurons_in_layer = [1, 2]
+    #activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
+    activation_fun_names = ["sigmoid"]
+    no_neurons_in_layer = [100]
 
-    for no_of_layers in range(1,3):
+    for no_of_layers in range(1, 2):
         for activation_fun_names_layer_1 in activation_fun_names:
             for activation_fun_names_layer_2 in activation_fun_names:
                 for no_neurons_in_layer_1 in no_neurons_in_layer:
