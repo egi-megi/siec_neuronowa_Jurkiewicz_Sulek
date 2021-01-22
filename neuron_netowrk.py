@@ -33,16 +33,18 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
             (x_train.values.reshape([len(x_train), 2])[train, :], y_train.values[train]))
         train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
         # Stop criterion, patience - number of worse loss
-        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10, min_delta=0.001)
-        # Fit data to model
-        history = model.fit(train_dataset,
-                            epochs=no_epochs, callbacks=[callback],
-                            verbose=verbosity)
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10, min_delta=0.005)
         # Generate generalization metrics
         input_valid = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[valid, :],
                                                           y_train.values[valid]))
-        test_dataset = input_valid.shuffle(len(y_train.values[valid])).batch(no_batch_size)
-        scores = model.evaluate(test_dataset, verbose=0)
+        valid_dataset = input_valid.shuffle(len(y_train.values[valid])).batch(no_batch_size)
+        # Fit data to model
+        history = model.fit(train_dataset,
+                            epochs=no_epochs, callbacks=[callback],
+                            verbose=verbosity, validation_data=valid_dataset)
+
+
+        scores = model.evaluate(valid_dataset, verbose=0)
 
         val_loss_epochs.append([scores[0], len(history.history['loss'])])
         val_loss.append(scores[0])
