@@ -33,7 +33,7 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
             (x_train.values.reshape([len(x_train), 2])[train, :], y_train.values[train]))
         train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
         # Stop criterion, patience - number of worse loss
-        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10)
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10, min_delta=0.001)
         # Fit data to model
         history = model.fit(train_dataset,
                             epochs=no_epochs, callbacks=[callback],
@@ -176,7 +176,7 @@ def make_model(dataset_without_noise):
 
     #activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
     activation_fun_names = ["tanh", "elu", "swish"]
-    no_neurons_in_layer = range(1, 20, 3)
+    no_neurons_in_layer = range(4, 20, 3)
 
     # Loops for nn with one layer
     for activation_fun_names_layer_1 in activation_fun_names:
