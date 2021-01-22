@@ -14,7 +14,7 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
                   activation_fun_names_layer_2, no_neurons_in_layer_2,
                   val_loss, no_epochs_from_val_loss):
     num_folds = 5
-    no_batch_size = 1000
+    no_batch_size = 10000
     no_epochs = 500
     verbosity = 1
     fold_no = 1
@@ -174,9 +174,9 @@ def read_dataset(dataset_without_noise):
 
 def make_model(dataset_without_noise):
 
-    activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
-    #activation_fun_names = ["sigmoid", "tanh"]
-    no_neurons_in_layer = range(1, 50)
+    #activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
+    activation_fun_names = ["tanh", "elu", "swish"]
+    no_neurons_in_layer = range(1, 20, 3)
 
     # Loops for nn with one layer
     for activation_fun_names_layer_1 in activation_fun_names:
@@ -184,7 +184,7 @@ def make_model(dataset_without_noise):
             val_loss = []
             no_epochs_from_val_loss = []
             no_of_layers = 1
-            for x in range(10):
+            for x in range(5):
                 no_neurons_in_layer_2 = 0
                 activation_fun_names_layer_2 = "0"
                 file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
