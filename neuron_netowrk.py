@@ -1,3 +1,4 @@
+import threading
 from itertools import chain
 
 import tensorflow as tf
@@ -12,15 +13,77 @@ from tensorflow.keras.regularizers import l2
 from sklearn.model_selection import KFold
 import os
 
+
+class ThreadSafePrinter:
+    def __init__(self):
+        self._lock = threading.Lock()
+
+    def print(self, fold_no, metrics_name, score, val_loss_epochs):
+        with self._lock:
+            print('------------------------------------------------------------------------')
+            print(
+                f'Score for fold {fold_no}: {metrics_name} of {score}')
+            print(val_loss_epochs)
+
+
+class SingleFoldThread (threading.Thread):
+    def __init__(self, train_set, valid_set, fold_no, activation_fun_layer_1, activation_fun_layer_2, neurons_layer_1,
+                 neurons_layer_2, printer: ThreadSafePrinter):
+        threading.Thread.__init__(self)
+        self.train = train_set
+        self.valid = valid_set
+        self.fold_no = fold_no
+        self.activation_fun_layer_1 = activation_fun_layer_1
+        self.activation_fun_layer_2 = activation_fun_layer_2
+        self.neurons_layer_1 = neurons_layer_1
+        self.neurons_layer_2 = neurons_layer_2
+        self.printer = printer
+        self.val_loss_epochs = None
+        self.val_loss = None
+        self.no_epochs_from_val_loss = None
+
+    def run(self):
+        no_epochs = 500
+        verbosity = 0
+
+        model, opt = get_compiled_model(self.activation_fun_layer_1, self.neurons_layer_1,
+                                        self.activation_fun_layer_2, self.neurons_layer_2)
+        # Stop criterion, patience - number of worse loss
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=20, min_delta=0.001)
+        # Fit data to model
+        history = model.fit(self.train,
+                            epochs=no_epochs, callbacks=[callback],
+                            verbose=verbosity, validation_data=self.valid)
+
+        scores = model.evaluate(self.valid, verbose=0)
+
+        self.val_loss_epochs = [scores[0], len(history.history['loss'])]
+        self.val_loss = scores[0]
+        self.no_epochs_from_val_loss = len(history.history['loss'])
+
+        self.printer.print(self.fold_no, model.metrics_names[0], scores[0], self.val_loss_epochs)
+
+    def get_return(self):
+        if self.is_alive():
+            return [0, 0], 0, 0
+        else:
+            return self.val_loss_epochs, self.val_loss, self.no_epochs_from_val_loss
+
+
 def training_with_cross_validation(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
-                  activation_fun_names_layer_2, no_neurons_in_layer_2,
-                  val_loss, no_epochs_from_val_loss):
+                                   activation_fun_names_layer_2, no_neurons_in_layer_2,
+                                   val_loss, no_epochs_from_val_loss):
+    print('************************************************************************')
+    print("Training starts for:")
+    print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1} | '
+          f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
+
     num_folds = 8
     no_batch_size = 500
-    no_epochs = 500
-    verbosity = 0
     fold_no = 1
     val_loss_epochs = []
+    printer = ThreadSafePrinter()
+    threads: list = []
 
     x_train, x_test, y_train, y_test = read_dataset(dataset_without_noise)
 
@@ -29,44 +92,39 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
 
     # K-fold Cross Validation model evaluation
     for train, valid in kfold.split(x_train.values):
-        model, opt = get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1,
-                                        activation_fun_names_layer_2, no_neurons_in_layer_2)
+        # preparation of training set
         input_train = tf.data.Dataset.from_tensor_slices(
             (x_train.values.reshape([len(x_train), 2])[train, :], y_train.values[train]))
         train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
-        # Stop criterion, patience - number of worse loss
-        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=20, min_delta=0.001)
-        # Generate generalization metrics
+        # preparation of validation set
         input_valid = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[valid, :],
                                                           y_train.values[valid]))
         valid_dataset = input_valid.shuffle(len(y_train.values[valid])).batch(no_batch_size)
-        # Fit data to model
-        history = model.fit(train_dataset,
-                            epochs=no_epochs, callbacks=[callback],
-                            verbose=verbosity, validation_data=valid_dataset)
 
-
-        scores = model.evaluate(valid_dataset, verbose=0)
-
-        val_loss_epochs.append([scores[0], len(history.history['loss'])])
-        val_loss.append(scores[0])
-        no_epochs_from_val_loss.append(len(history.history['loss']))
-
-        print('------------------------------------------------------------------------')
-        print(f'Training for fold {fold_no} ...')
-        print(
-            f'Score for fold {fold_no}: {model.metrics_names[0]} of {scores[0]}')
-        print(val_loss_epochs)
+        thread = SingleFoldThread(train_set=train_dataset, valid_set=valid_dataset, fold_no=fold_no,
+                                  activation_fun_layer_1=activation_fun_names_layer_1,
+                                  activation_fun_layer_2=activation_fun_names_layer_2,
+                                  neurons_layer_1=no_neurons_in_layer_1, neurons_layer_2=no_neurons_in_layer_2,
+                                  printer=printer)
+        threads.append(thread)
+        thread.start()
 
         # Increase fold number
         fold_no = fold_no + 1
 
+    for th in threads:
+        th.join()
+        single_val_loss_epoch, single_val_loss, single_no_epochs_from_vl = th.get_return()
+        val_loss_epochs.append(single_val_loss_epoch)
+        val_loss.append(single_val_loss)
+        no_epochs_from_val_loss.append(single_no_epochs_from_vl)
+
     return val_loss_epochs, val_loss, no_epochs_from_val_loss
+
 
 def make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
                   activation_fun_names_layer_2, no_neurons_in_layer_2,
                   val_loss, no_epochs_from_val_loss):
-
     if no_neurons_in_layer_2 == 0:
         no_of_layers = 1
     else:
@@ -77,32 +135,43 @@ def make_training(dataset_without_noise, activation_fun_names_layer_1, no_neuron
                 activation_fun_names_layer_2 + "_" + str(no_neurons_in_layer_2)
 
     val_loss_epochs, val_loss, no_epochs_from_val_loss = training_with_cross_validation(dataset_without_noise,
-                                                                                        activation_fun_names_layer_1, no_neurons_in_layer_1,
-                                                                                        activation_fun_names_layer_2, no_neurons_in_layer_2,
-                                                                                        val_loss, no_epochs_from_val_loss)
+                                                                                        activation_fun_names_layer_1,
+                                                                                        no_neurons_in_layer_1,
+                                                                                        activation_fun_names_layer_2,
+                                                                                        no_neurons_in_layer_2,
+                                                                                        val_loss,
+                                                                                        no_epochs_from_val_loss)
 
+    print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+    print("Training ends for:")
+    print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1} | '
+          f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
+    print(val_loss_epochs)
     # Write to csv files and compute average for loss and number of epochs
     write_to_csv(file_name, val_loss_epochs, no_of_layers)
-    #average_loss = get_avarge(val_loss)
-    #average_epochs = get_avarge(no_epochs_from_val_loss)
-    #average = [[average_loss, int(average_epochs), file_name]]
-    #average_file_name = str(no_of_layers) + "_average"
-    #write_to_csv(average_file_name, average, no_of_layers)
+    # average_loss = get_avarge(val_loss)
+    # average_epochs = get_avarge(no_epochs_from_val_loss)
+    # average = [[average_loss, int(average_epochs), file_name]]
+    # average_file_name = str(no_of_layers) + "_average"
+    # write_to_csv(average_file_name, average, no_of_layers)
 
     return file_name
 
 
-def get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2, no_neurons_in_layer_2):
-
+def get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2,
+                       no_neurons_in_layer_2):
     if no_neurons_in_layer_2 == 0:
         model = tf.keras.Sequential([
-            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1, kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
+            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1,
+                                  kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
             tf.keras.layers.Dense(1)
         ])
     else:
         model = tf.keras.Sequential([
-            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1, kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
-            tf.keras.layers.Dense(no_neurons_in_layer_2, activation=activation_fun_names_layer_2, kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
+            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1,
+                                  kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
+            tf.keras.layers.Dense(no_neurons_in_layer_2, activation=activation_fun_names_layer_2,
+                                  kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
             tf.keras.layers.Dense(1)
         ])
 
@@ -110,14 +179,13 @@ def get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1, acti
     model.compile(optimizer=opt,
                   loss=['MeanSquaredError'],
                   metrics=['MeanSquaredError'])
-    print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1}')
-    print(f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
+    # print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1}')
+    # print(f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
 
     return model, opt
 
 
 def write_to_csv(file_name, val_loss, no_of_layers):
-
     if no_of_layers == 1:
         path_no_layer = "one/"
     else:
@@ -127,7 +195,7 @@ def write_to_csv(file_name, val_loss, no_of_layers):
         os.makedirs("out/" + path_no_layer)
 
     with open("out/" + path_no_layer + file_name + ".csv", 'a', newline='',
-                  encoding='utf-8') as csvfile:
+              encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(val_loss)
 
@@ -135,8 +203,8 @@ def write_to_csv(file_name, val_loss, no_of_layers):
 def get_avarge(array):
     y = 0
     for x in array:
-        y=y+x
-    average = y/len(array)
+        y = y + x
+    average = y / len(array)
     return average
 
 
@@ -177,16 +245,14 @@ def read_dataset(dataset_without_noise):
 
 
 def make_model(dataset_without_noise):
-
     # activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
-    activation_fun_names = ["tanh"]
+    activation_fun_names = ["swish"]
     no_neurons_in_layer = list(chain(
         range(3, 10, 1),
         range(10, 30, 2),
         range(30, 80, 5),
         range(80, 180, 10),
-        range(180, 380, 20),
-        range(380, 1000, 50)))
+        range(180, 380, 20)))
 
     # Loops for nn with one layer
     for activation_fun_names_layer_1 in activation_fun_names:
@@ -216,14 +282,13 @@ def make_model(dataset_without_noise):
                     no_epochs_from_val_loss = []
                     no_of_layers = 2
                     # for x in range(5):
-                    file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
-                                      activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss, no_epochs_from_val_loss)
+                    file_name = make_training(dataset_without_noise, activation_fun_names_layer_1,
+                                              no_neurons_in_layer_1,
+                                              activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss,
+                                              no_epochs_from_val_loss)
                     average_loss = get_avarge(val_loss)
                     std_dev_of_los = np.std(val_loss)
                     average_epochs = get_avarge(no_epochs_from_val_loss)
                     average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
                     average_file_name = str(no_of_layers) + "_average"
                     write_to_csv(average_file_name, average, no_of_layers)
-
-
-
