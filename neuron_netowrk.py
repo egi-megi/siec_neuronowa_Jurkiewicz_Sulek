@@ -180,13 +180,17 @@ def make_model(dataset_without_noise):
 
     # activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
     activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
-    no_neurons_in_layer = chain(
+    no_neurons_in_layer = list(chain(
         range(3, 10, 1),
         range(10, 30, 2),
         range(30, 80, 5),
         range(80, 180, 10),
         range(180, 380, 20),
-        range(380, 1000, 50))
+        range(380, 1000, 50)))
+
+    for activation_fun_names_layer_1 in activation_fun_names:
+        for no_neurons_in_layer_1 in no_neurons_in_layer:
+            print(activation_fun_names_layer_1 + str(no_neurons_in_layer_1))
 
     # Loops for nn with one layer
     for activation_fun_names_layer_1 in activation_fun_names:
