@@ -1,3 +1,5 @@
+from itertools import chain
+
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,10 +15,10 @@ import os
 def training_with_cross_validation(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
                   activation_fun_names_layer_2, no_neurons_in_layer_2,
                   val_loss, no_epochs_from_val_loss):
-    num_folds = 5
-    no_batch_size = 10000
+    num_folds = 8
+    no_batch_size = 500
     no_epochs = 500
-    verbosity = 1
+    verbosity = 0
     fold_no = 1
     val_loss_epochs = []
 
@@ -33,7 +35,7 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
             (x_train.values.reshape([len(x_train), 2])[train, :], y_train.values[train]))
         train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
         # Stop criterion, patience - number of worse loss
-        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10, min_delta=0.001)
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=20, min_delta=0.001)
         # Generate generalization metrics
         input_valid = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[valid, :],
                                                           y_train.values[valid]))
@@ -176,9 +178,15 @@ def read_dataset(dataset_without_noise):
 
 def make_model(dataset_without_noise):
 
-    #activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
-    activation_fun_names = ["tanh", "elu", "swish"]
-    no_neurons_in_layer = range(4, 20, 3)
+    # activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
+    activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
+    no_neurons_in_layer = chain(
+        range(3, 10, 1),
+        range(10, 30, 2),
+        range(30, 80, 5),
+        range(80, 180, 10),
+        range(180, 380, 20),
+        range(380, 1000, 50))
 
     # Loops for nn with one layer
     for activation_fun_names_layer_1 in activation_fun_names:
@@ -186,10 +194,10 @@ def make_model(dataset_without_noise):
             val_loss = []
             no_epochs_from_val_loss = []
             no_of_layers = 1
-            for x in range(5):
-                no_neurons_in_layer_2 = 0
-                activation_fun_names_layer_2 = "0"
-                file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
+            # for x in range(5):
+            no_neurons_in_layer_2 = 0
+            activation_fun_names_layer_2 = "0"
+            file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
                               activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss, no_epochs_from_val_loss)
             average_loss = get_avarge(val_loss)
             std_dev_of_los = np.std(val_loss)
@@ -206,12 +214,13 @@ def make_model(dataset_without_noise):
                     val_loss = []
                     no_epochs_from_val_loss = []
                     no_of_layers = 2
-                    for x in range(10):
-                        file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
+                    # for x in range(5):
+                    file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
                                       activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss, no_epochs_from_val_loss)
                     average_loss = get_avarge(val_loss)
+                    std_dev_of_los = np.std(val_loss)
                     average_epochs = get_avarge(no_epochs_from_val_loss)
-                    average = [[average_loss, int(average_epochs), file_name]]
+                    average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
                     average_file_name = str(no_of_layers) + "_average"
                     write_to_csv(average_file_name, average, no_of_layers)
 
