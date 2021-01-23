@@ -27,7 +27,7 @@ class ThreadSafePrinter:
             print(val_loss_epochs)
 
 
-class SingleFoldThread (threading.Thread):
+class SingleFoldThread(threading.Thread):
     def __init__(self, train_set, valid_set, fold_no, activation_fun_layer_1, activation_fun_layer_2, neurons_layer_1,
                  neurons_layer_2, printer: ThreadSafePrinter):
         threading.Thread.__init__(self)
@@ -296,5 +296,6 @@ def make_model(dataset_without_noise):
                     std_dev_of_los = np.std(val_loss)
                     average_epochs = get_avarge(no_epochs_from_val_loss)
                     average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
-                    average_file_name = str(no_of_layers) + "_average"
+                    average_file_name = str(no_of_layers) + "_" + str(activation_fun_names_layer_1) + "_" + \
+                                        str(activation_fun_names_layer_2) + "_average"
                     write_to_csv(average_file_name, average, no_of_layers)
