@@ -33,7 +33,7 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
             (x_train.values.reshape([len(x_train), 2])[train, :], y_train.values[train]))
         train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
         # Stop criterion, patience - number of worse loss
-        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10, min_delta=0.005)
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10, min_delta=0.001)
         # Generate generalization metrics
         input_valid = tf.data.Dataset.from_tensor_slices((x_train.values.reshape([len(x_train), 2])[valid, :],
                                                           y_train.values[valid]))
@@ -94,13 +94,13 @@ def get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1, acti
 
     if no_neurons_in_layer_2 == 0:
         model = tf.keras.Sequential([
-            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1, kernel_regularizer=l2(1e-5)),
+            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1, kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
             tf.keras.layers.Dense(1)
         ])
     else:
         model = tf.keras.Sequential([
-            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1, kernel_regularizer=l2(1e-5)),
-            tf.keras.layers.Dense(no_neurons_in_layer_2, activation=activation_fun_names_layer_2, kernel_regularizer=l2(1e-5)),
+            tf.keras.layers.Dense(no_neurons_in_layer_1, activation=activation_fun_names_layer_1, kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
+            tf.keras.layers.Dense(no_neurons_in_layer_2, activation=activation_fun_names_layer_2, kernel_regularizer=l2(1e-5), kernel_initializer=tf.keras.initializers.ones),
             tf.keras.layers.Dense(1)
         ])
 
@@ -192,8 +192,9 @@ def make_model(dataset_without_noise):
                 file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
                               activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss, no_epochs_from_val_loss)
             average_loss = get_avarge(val_loss)
+            std_dev_of_los = np.std(val_loss)
             average_epochs = get_avarge(no_epochs_from_val_loss)
-            average = [[average_loss, int(average_epochs), file_name]]
+            average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
             average_file_name = str(no_of_layers) + "_average"
             write_to_csv(average_file_name, average, no_of_layers)
 
