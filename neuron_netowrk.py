@@ -280,22 +280,21 @@ def make_model(dataset_without_noise):
     #         write_to_csv(average_file_name, average, no_of_layers)
 
     # Loops for nn with two layers
-    for activation_fun_names_layer_1 in activation_fun_names_1:
-        for activation_fun_names_layer_2 in activation_fun_names_2:
-            for no_neurons_in_layer_1 in no_neurons_in_layer_1:
-                for no_neurons_in_layer_2 in no_neurons_in_layer_2:
+    for activation_1 in activation_fun_names_1:
+        for activation_2 in activation_fun_names_2:
+            for neurons_1 in no_neurons_in_layer_1:
+                for neurons_2 in no_neurons_in_layer_2:
                     val_loss = []
                     no_epochs_from_val_loss = []
                     no_of_layers = 2
-                    # for x in range(5):
-                    file_name = make_training(dataset_without_noise, activation_fun_names_layer_1,
-                                              no_neurons_in_layer_1,
-                                              activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss,
+                    file_name = make_training(dataset_without_noise, activation_1,
+                                              neurons_1,
+                                              activation_2, neurons_2, val_loss,
                                               no_epochs_from_val_loss)
                     average_loss = get_avarge(val_loss)
                     std_dev_of_los = np.std(val_loss)
                     average_epochs = get_avarge(no_epochs_from_val_loss)
                     average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
-                    average_file_name = str(no_of_layers) + "_" + str(activation_fun_names_layer_1) + "_" + \
-                                        str(activation_fun_names_layer_2) + "_average"
+                    average_file_name = str(no_of_layers) + "_" + str(activation_1) + "_" + \
+                                        str(activation_2) + "_average"
                     write_to_csv(average_file_name, average, no_of_layers)
