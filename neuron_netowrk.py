@@ -257,6 +257,7 @@ def make_model(dataset_without_noise):
     activation_fun_names_2 = ["sigmoid"]
     no_neurons_in_layer_2 = list(chain(
         range(3, 10, 1),
+        range(3, 10, 1),
         range(10, 20, 2),
         range(20, 51, 5)))
 
