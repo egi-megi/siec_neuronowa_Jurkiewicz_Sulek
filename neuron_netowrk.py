@@ -179,7 +179,7 @@ def read_dataset(dataset_without_noise):
 def make_model(dataset_without_noise):
 
     # activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
-    activation_fun_names = ["sigmoid", "tanh", "elu", "swish"]
+    activation_fun_names = ["tanh"]
     no_neurons_in_layer = list(chain(
         range(3, 10, 1),
         range(10, 30, 2),
@@ -187,10 +187,6 @@ def make_model(dataset_without_noise):
         range(80, 180, 10),
         range(180, 380, 20),
         range(380, 1000, 50)))
-
-    for activation_fun_names_layer_1 in activation_fun_names:
-        for no_neurons_in_layer_1 in no_neurons_in_layer:
-            print(activation_fun_names_layer_1 + str(no_neurons_in_layer_1))
 
     # Loops for nn with one layer
     for activation_fun_names_layer_1 in activation_fun_names:
@@ -202,12 +198,13 @@ def make_model(dataset_without_noise):
             no_neurons_in_layer_2 = 0
             activation_fun_names_layer_2 = "0"
             file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
-                              activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss, no_epochs_from_val_loss)
+                                      activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss,
+                                      no_epochs_from_val_loss)
             average_loss = get_avarge(val_loss)
             std_dev_of_los = np.std(val_loss)
             average_epochs = get_avarge(no_epochs_from_val_loss)
             average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
-            average_file_name = str(no_of_layers) + "_average"
+            average_file_name = str(no_of_layers) + "_" + str(activation_fun_names_layer_1) + "_average"
             write_to_csv(average_file_name, average, no_of_layers)
 
     # Loops for nn with two layers
