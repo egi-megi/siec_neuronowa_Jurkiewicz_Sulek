@@ -28,10 +28,11 @@ class ThreadSafePrinter:
 
 
 class SingleFoldThread(threading.Thread):
-    def __init__(self, train_set, activation_fun_layer_1, activation_fun_layer_2, neurons_layer_1,
+    def __init__(self, train_set, val_set, activation_fun_layer_1, activation_fun_layer_2, neurons_layer_1,
                  neurons_layer_2, printer: ThreadSafePrinter):
         threading.Thread.__init__(self)
         self.train = train_set
+        self.valid = val_set
         self.activation_fun_layer_1 = activation_fun_layer_1
         self.activation_fun_layer_2 = activation_fun_layer_2
         self.neurons_layer_1 = neurons_layer_1
@@ -52,7 +53,7 @@ class SingleFoldThread(threading.Thread):
         # Fit data to model
         history = model.fit(self.train,
                             epochs=no_epochs, callbacks=[callback],
-                            verbose=verbosity, validation_split=0.2)
+                            verbose=verbosity, validation_data=self.valid)
 
         scores = model.evaluate(self.valid, verbose=0)
 
@@ -82,14 +83,18 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
     val_loss_epochs = []
     printer = ThreadSafePrinter()
 
-    x_train, x_test, y_train, y_test = read_dataset(dataset_without_noise)
+    x_train, x_val, x_test, y_train, y_val, y_test = read_dataset(dataset_without_noise)
     threads: list = []
     # preparation of training set
     input_train = tf.data.Dataset.from_tensor_slices(
             (x_train.values.reshape([len(x_train), 2]), y_train.values))
     train_dataset = input_train.shuffle(len(y_train.values)).batch(no_batch_size)
 
-    thread = SingleFoldThread(train_set=train_dataset,
+    input_val = tf.data.Dataset.from_tensor_slices(
+        (x_val.values.reshape([len(x_val), 2]), y_val.values))
+    val_dataset = input_val.shuffle(len(y_val.values)).batch(no_batch_size)
+
+    thread = SingleFoldThread(train_set=train_dataset, val_set=val_dataset,
                               activation_fun_layer_1=activation_fun_names_layer_1,
                               activation_fun_layer_2=activation_fun_names_layer_2,
                               neurons_layer_1=no_neurons_in_layer_1, neurons_layer_2=no_neurons_in_layer_2,
@@ -221,20 +226,25 @@ def draw_plot(model):
 
 def read_dataset(read_dataset):
     test_dataset_numb = 20000
+    val_dataset_numb = 1000
     dataset = pd.read_csv(read_dataset, names=["x1", "x2", "y"])
     y_dataset = dataset.pop("y")
-    x_train, x_test = dataset[:-test_dataset_numb], dataset[-test_dataset_numb:]
-    y_train, y_test = y_dataset[:-test_dataset_numb], y_dataset[-test_dataset_numb:]
-    return x_train, x_test, y_train, y_test
+    x_train, x_val, x_test = dataset[:-(val_dataset_numb+test_dataset_numb)], \
+                             dataset[-(val_dataset_numb+test_dataset_numb):-test_dataset_numb], \
+                             dataset[-test_dataset_numb:]
+    y_train, y_val, y_test = y_dataset[:-(val_dataset_numb+test_dataset_numb)], \
+                             y_dataset[-(val_dataset_numb+test_dataset_numb):-test_dataset_numb], \
+                             y_dataset[-test_dataset_numb:]
+    return x_train, x_val, x_test, y_train, y_val, y_test
 
 
 def make_model(read_dataset):
     # activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
-    activation_fun_names_1 = ["tanh"]
-    no_neurons_in_layer_1 = 2
+    #activation_fun_names_1 = ["tanh"]
+    #no_neurons_in_layer_1 = 2
 
-    activation_fun_names_2 = ["tanh"]
-    no_neurons_in_layer_2 = 2
+    #activation_fun_names_2 = ["tanh"]
+    #no_neurons_in_layer_2 = 2
 
     # Loops for nn with one layer
     # for activation_fun_names_layer_1 in activation_fun_names_1:
