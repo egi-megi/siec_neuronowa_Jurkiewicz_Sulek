@@ -63,6 +63,8 @@ class SingleFoldThread(threading.Thread):
 
         self.printer.print(model.metrics_names[0], scores[0], self.val_loss_epochs)
 
+        make_evaluation(model)
+
     def get_return(self):
         if self.is_alive():
             return [0, 0], 0, 0
@@ -237,6 +239,22 @@ def read_dataset(read_dataset):
                              y_dataset[-test_dataset_numb:]
     return x_train, x_val, x_test, y_train, y_val, y_test
 
+def make_evaluation(model):
+    x_train, x_val, x_test, y_train, y_val, y_test = read_dataset(dataset_without_noise)
+
+    # preparation of training set
+    #input_test = tf.data.Dataset.from_tensor_slices(
+    #    (x_test.values.reshape([len(x_test), 2]), y_test.values))
+    #test_dataset = input_test.shuffle(len(y_test.values)).batch(no_batch_size)
+
+    loss_test = model.evaluate(
+        x=x_test, y=y_test, batch_size=None, verbose=1, sample_weight=None, steps=None,
+        callbacks=None, max_queue_size=10, workers=1, use_multiprocessing=False,
+        return_dict=False
+    )
+
+    print(f'Loss for test dataset: {loss_test}')
+
 
 def make_model(read_dataset):
     # activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
@@ -266,9 +284,9 @@ def make_model(read_dataset):
     #         write_to_csv(average_file_name, average, no_of_layers)
 
     # Loops for nn with two layers
-    params=[("tanh","tanh",2,2)]
+    params=[("tanh", "tanh", 2, 2)]
 
-    for activation_1 ,activation_2 , neurons_1 , neurons_2 in params:
+    for activation_1,activation_2, neurons_1, neurons_2 in params:
         val_loss = []
         no_epochs_from_val_loss = []
         no_of_layers = 2
