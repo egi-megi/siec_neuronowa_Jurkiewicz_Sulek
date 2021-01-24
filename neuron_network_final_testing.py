@@ -83,19 +83,26 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
     printer = ThreadSafePrinter()
 
     x_train, x_test, y_train, y_test = read_dataset(dataset_without_noise)
-
+    threads: list = []
     # preparation of training set
-    #input_train = tf.data.Dataset.from_tensor_slices(
-    #        (x_train.values.reshape([len(x_train), 2])[train, :], y_train.values[train]))
-    #train_dataset = input_train.shuffle(len(y_train.values[train])).batch(no_batch_size)
+    input_train = tf.data.Dataset.from_tensor_slices(
+            (x_train.values.reshape([len(x_train), 2]), y_train.values))
+    train_dataset = input_train.shuffle(len(y_train.values)).batch(no_batch_size)
 
+    thread = SingleFoldThread(train_set=train_dataset,
+                              activation_fun_layer_1=activation_fun_names_layer_1,
+                              activation_fun_layer_2=activation_fun_names_layer_2,
+                              neurons_layer_1=no_neurons_in_layer_1, neurons_layer_2=no_neurons_in_layer_2,
+                              printer=printer)
+    threads.append(thread)
+    thread.start()
 
-    #for th in threads:
-    #    th.join()
-    #    single_val_loss_epoch, single_val_loss, single_no_epochs_from_vl = th.get_return()
-    #    val_loss_epochs.append(single_val_loss_epoch)
-    #    val_loss.append(single_val_loss)
-    #    no_epochs_from_val_loss.append(single_no_epochs_from_vl)
+    for th in threads:
+        th.join()
+        single_val_loss_epoch, single_val_loss, single_no_epochs_from_vl = th.get_return()
+        val_loss_epochs.append(single_val_loss_epoch)
+        val_loss.append(single_val_loss)
+        no_epochs_from_val_loss.append(single_no_epochs_from_vl)
 
     return val_loss_epochs, val_loss, no_epochs_from_val_loss
 
@@ -249,21 +256,30 @@ def make_model(read_dataset):
     #         write_to_csv(average_file_name, average, no_of_layers)
 
     # Loops for nn with two layers
-    for activation_1 in activation_fun_names_1:
-        for activation_2 in activation_fun_names_2:
-            for neurons_1 in no_neurons_in_layer_1:
-                for neurons_2 in no_neurons_in_layer_2:
-                    val_loss = []
-                    no_epochs_from_val_loss = []
-                    no_of_layers = 2
-                    file_name = make_training(read_dataset, activation_1,
-                                              neurons_1,
-                                              activation_2, neurons_2, val_loss,
-                                              no_epochs_from_val_loss)
-                    average_loss = get_avarge(val_loss)
-                    std_dev_of_los = np.std(val_loss)
-                    average_epochs = get_avarge(no_epochs_from_val_loss)
-                    average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
-                    average_file_name = str(no_of_layers) + "_" + str(activation_1) + "_" + \
-                                        str(activation_2) + "_average"
-                    write_to_csv(average_file_name, average, no_of_layers)
+    params=[("tanh","tanh",2,2)]
+
+    for activation_1 ,activation_2 , neurons_1 , neurons_2 in params:
+        val_loss = []
+        no_epochs_from_val_loss = []
+        no_of_layers = 2
+        file_name = make_training(read_dataset, activation_1,
+                                  neurons_1,
+                                  activation_2, neurons_2, val_loss,
+                                  no_epochs_from_val_loss)
+        average_loss = get_avarge(val_loss)
+        std_dev_of_los = np.std(val_loss)
+        average_epochs = get_avarge(no_epochs_from_val_loss)
+        average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
+        average_file_name = str(no_of_layers) + "_" + str(activation_1) + "_" + \
+                            str(activation_2) + "_average"
+        write_to_csv(average_file_name, average, no_of_layers)
+
+
+# Press the green button in the gutter to run the script.
+if __name__ == '__main__':
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+    #for neuron_network
+    dataset_without_noise = "dataset/dataset_100000.csv"
+    make_model(dataset_without_noise)
