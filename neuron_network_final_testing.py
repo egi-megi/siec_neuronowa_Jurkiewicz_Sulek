@@ -38,9 +38,10 @@ class SingleFoldThread(threading.Thread):
         self.neurons_layer_1 = neurons_layer_1
         self.neurons_layer_2 = neurons_layer_2
         self.printer = printer
-        self.val_loss_epochs = None
+        self.val_loss_epochs_test = None
         self.val_loss = None
         self.no_epochs_from_val_loss = None
+        self.test_loss = None
 
     def run(self):
         no_epochs = 500
@@ -56,25 +57,27 @@ class SingleFoldThread(threading.Thread):
                             verbose=verbosity, validation_data=self.valid)
 
         scores = model.evaluate(self.valid, verbose=0)
+        test_scores = make_evaluation(model)
 
-        self.val_loss_epochs = [scores[0], len(history.history['loss'])]
+        self.val_loss_epochs_test = [scores[0], len(history.history['loss']), test_scores[0]]
         self.val_loss = scores[0]
         self.no_epochs_from_val_loss = len(history.history['loss'])
+        self.test_loss = test_scores[0]
 
-        self.printer.print(model.metrics_names[0], scores[0], self.val_loss_epochs)
+        self.printer.print(model.metrics_names[0], scores[0], self.val_loss_epochs_test)
 
-        make_evaluation(model)
+
 
     def get_return(self):
         if self.is_alive():
-            return [0, 0], 0, 0
+            return [0, 0], 0, 0, 0
         else:
-            return self.val_loss_epochs, self.val_loss, self.no_epochs_from_val_loss
+            return self.val_loss_epochs_test, self.val_loss, self.no_epochs_from_val_loss, self.test_loss
 
 
 def training_with_cross_validation(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
                                    activation_fun_names_layer_2, no_neurons_in_layer_2,
-                                   val_loss, no_epochs_from_val_loss):
+                                   val_loss, no_epochs_from_val_loss, loss_test_array):
     print('************************************************************************')
     print("Training starts for:")
     print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1} | '
@@ -106,17 +109,18 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
 
     for th in threads:
         th.join()
-        single_val_loss_epoch, single_val_loss, single_no_epochs_from_vl = th.get_return()
+        single_val_loss_epoch, single_val_loss, single_no_epochs_from_vl, single_test_loss = th.get_return()
         val_loss_epochs.append(single_val_loss_epoch)
         val_loss.append(single_val_loss)
         no_epochs_from_val_loss.append(single_no_epochs_from_vl)
+        loss_test_array.append(single_test_loss)
 
-    return val_loss_epochs, val_loss, no_epochs_from_val_loss
+    return val_loss_epochs, val_loss, no_epochs_from_val_loss, loss_test_array
 
 
 def make_training(read_dataset, activation_fun_names_layer_1, no_neurons_in_layer_1,
                   activation_fun_names_layer_2, no_neurons_in_layer_2,
-                  val_loss, no_epochs_from_val_loss):
+                  val_loss, no_epochs_from_val_loss, loss_test_array):
     if no_neurons_in_layer_2 == 0:
         no_of_layers = 1
     else:
@@ -126,24 +130,25 @@ def make_training(read_dataset, activation_fun_names_layer_1, no_neurons_in_laye
                 + activation_fun_names_layer_1 + "_" + str(no_neurons_in_layer_1) + "_" + \
                 activation_fun_names_layer_2 + "_" + str(no_neurons_in_layer_2)
 
-    val_loss_epochs, val_loss, no_epochs_from_val_loss = training_with_cross_validation(read_dataset,
+    val_loss_epochs_test, val_loss, no_epochs_from_val_loss, loss_test_array = training_with_cross_validation(read_dataset,
                                                                                         activation_fun_names_layer_1,
                                                                                         no_neurons_in_layer_1,
                                                                                         activation_fun_names_layer_2,
                                                                                         no_neurons_in_layer_2,
                                                                                         val_loss,
-                                                                                        no_epochs_from_val_loss)
+                                                                                        no_epochs_from_val_loss,
+                                                                                        loss_test_array)
 
     print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
     print("Training ends for:")
     print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1} | '
           f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
-    print(val_loss_epochs)
+    print(val_loss_epochs_test)
     print("Time:", datetime.now().strftime("%H:%M:%S"))
     # Write to csv files and compute average for loss and number of epochs
-    write_to_csv(file_name, val_loss_epochs, no_of_layers)
+    write_to_csv(file_name, val_loss_epochs_test, no_of_layers)
 
-    return file_name
+    return file_name, loss_test_array
 
 
 def get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2,
@@ -255,6 +260,8 @@ def make_evaluation(model):
 
     print(f'Loss for test dataset: {loss_test}')
 
+    return loss_test
+
 
 def make_model(read_dataset):
     # activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
@@ -284,24 +291,31 @@ def make_model(read_dataset):
     #         write_to_csv(average_file_name, average, no_of_layers)
 
     # Loops for nn with two layers
-    params=[("tanh", "tanh", 2, 2)]
+    params=[("tanh", "tanh", 2, 2),
+            ("sigmoid", "sigmoid", 2, 2)]
 
     for activation_1,activation_2, neurons_1, neurons_2 in params:
         val_loss = []
         no_epochs_from_val_loss = []
+        loss_test_array = []
         no_of_layers = 2
-        file_name = make_training(read_dataset, activation_1,
-                                  neurons_1,
-                                  activation_2, neurons_2, val_loss,
-                                  no_epochs_from_val_loss)
+        for x in range(5):
+            file_name, loss_test_array = make_training(read_dataset, activation_1,
+                                      neurons_1,
+                                      activation_2, neurons_2, val_loss,
+                                      no_epochs_from_val_loss, loss_test_array)
+
         average_loss = get_avarge(val_loss)
         std_dev_of_los = np.std(val_loss)
         average_epochs = get_avarge(no_epochs_from_val_loss)
-        average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
-        average_file_name = str(no_of_layers) + "_" + str(activation_1) + "_" + \
-                            str(activation_2) + "_average"
+        std_dev_of_epoch = np.std(no_epochs_from_val_loss)
+        average_loss_test = get_avarge(loss_test_array)
+        std_dev_of_los_test = np.std(loss_test_array)
+        average = [[average_loss, std_dev_of_los, int(average_epochs), std_dev_of_epoch,
+                    average_loss_test, std_dev_of_los_test, file_name]]
+        average_file_name = str(no_of_layers) + "_average"
         write_to_csv(average_file_name, average, no_of_layers)
-
+#0.7093044519424438,78,0.7005310654640198
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
