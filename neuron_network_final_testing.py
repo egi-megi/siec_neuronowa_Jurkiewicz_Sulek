@@ -28,19 +28,17 @@ class ThreadSafePrinter:
 
 
 class SingleFoldThread(threading.Thread):
-    def __init__(self, train_set, val_set, activation_fun_layer_1, activation_fun_layer_2, neurons_layer_1,
-                 neurons_layer_2, printer: ThreadSafePrinter):
+    def __init__(self, train_set, val_set, test_set, activation_fun_layer_1, activation_fun_layer_2, neurons_layer_1,
+                 neurons_layer_2):
         threading.Thread.__init__(self)
         self.train = train_set
         self.valid = val_set
+        self.test = test_set
         self.activation_fun_layer_1 = activation_fun_layer_1
         self.activation_fun_layer_2 = activation_fun_layer_2
         self.neurons_layer_1 = neurons_layer_1
         self.neurons_layer_2 = neurons_layer_2
-        self.printer = printer
-        self.val_loss_epochs_test = None
         self.val_loss = None
-        self.no_epochs_from_val_loss = None
         self.test_loss = None
 
     def run(self):
@@ -57,39 +55,32 @@ class SingleFoldThread(threading.Thread):
                             verbose=verbosity, validation_data=self.valid)
 
         scores = model.evaluate(self.valid, verbose=0)
-        test_scores = make_evaluation(model)
+        test_scores = make_evaluation(model, self.test)
 
-        self.val_loss_epochs_test = [scores[0], len(history.history['loss']), test_scores[0]]
         self.val_loss = scores[0]
-        self.no_epochs_from_val_loss = len(history.history['loss'])
         self.test_loss = test_scores[0]
-
-        self.printer.print(model.metrics_names[0], scores[0], self.val_loss_epochs_test)
-
-
 
     def get_return(self):
         if self.is_alive():
-            return [0, 0], 0, 0, 0
+            return 0, 0
         else:
-            return self.val_loss_epochs_test, self.val_loss, self.no_epochs_from_val_loss, self.test_loss
+            return self.val_loss, self.test_loss
 
 
-def training_with_cross_validation(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
-                                   activation_fun_names_layer_2, no_neurons_in_layer_2,
-                                   val_loss, no_epochs_from_val_loss, loss_test_array):
+def training_with_test(training_set: str, test_set: str, activation_fun_name_layer_1, no_neurons_in_layer_1,
+                                   activation_fun_name_layer_2, no_neurons_in_layer_2):
     print('************************************************************************')
     print("Training starts for:")
-    print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1} | '
-          f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
+    print("training set:" + training_set + " test set:" + test_set)
+    print(f'Layers name: {activation_fun_name_layer_1}, layers no {no_neurons_in_layer_1} | '
+          f'Layers name: {activation_fun_name_layer_2}, layers no {no_neurons_in_layer_2}')
     print("Time:", datetime.now().strftime("%H:%M:%S"))
 
     no_batch_size = 500
-    val_loss_epochs = []
-    printer = ThreadSafePrinter()
 
-    x_train, x_val, x_test, y_train, y_val, y_test = read_dataset(dataset_without_noise)
-    threads: list = []
+    x_train, x_val, y_train, y_val = read_training_dataset(training_set)
+    test_dataset = read_test_dataset(test_set)
+
     # preparation of training set
     input_train = tf.data.Dataset.from_tensor_slices(
             (x_train.values.reshape([len(x_train), 2]), y_train.values))
@@ -99,56 +90,49 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
         (x_val.values.reshape([len(x_val), 2]), y_val.values))
     val_dataset = input_val.shuffle(len(y_val.values)).batch(no_batch_size)
 
-    thread = SingleFoldThread(train_set=train_dataset, val_set=val_dataset,
-                              activation_fun_layer_1=activation_fun_names_layer_1,
-                              activation_fun_layer_2=activation_fun_names_layer_2,
+    thread = SingleFoldThread(train_set=train_dataset, val_set=val_dataset, test_set=test_dataset,
+                              activation_fun_layer_1=activation_fun_name_layer_1,
+                              activation_fun_layer_2=activation_fun_name_layer_2,
                               neurons_layer_1=no_neurons_in_layer_1, neurons_layer_2=no_neurons_in_layer_2,
-                              printer=printer)
-    threads.append(thread)
+                              )
     thread.start()
-
-    for th in threads:
-        th.join()
-        single_val_loss_epoch, single_val_loss, single_no_epochs_from_vl, single_test_loss = th.get_return()
-        val_loss_epochs.append(single_val_loss_epoch)
-        val_loss.append(single_val_loss)
-        no_epochs_from_val_loss.append(single_no_epochs_from_vl)
-        loss_test_array.append(single_test_loss)
-
-    return val_loss_epochs, val_loss, no_epochs_from_val_loss, loss_test_array
-
-
-def make_training(read_dataset, activation_fun_names_layer_1, no_neurons_in_layer_1,
-                  activation_fun_names_layer_2, no_neurons_in_layer_2,
-                  val_loss, no_epochs_from_val_loss, loss_test_array):
-    if no_neurons_in_layer_2 == 0:
-        no_of_layers = 1
-    else:
-        no_of_layers = 2
-
-    file_name = str(no_of_layers) + "_" \
-                + activation_fun_names_layer_1 + "_" + str(no_neurons_in_layer_1) + "_" + \
-                activation_fun_names_layer_2 + "_" + str(no_neurons_in_layer_2)
-
-    val_loss_epochs_test, val_loss, no_epochs_from_val_loss, loss_test_array = training_with_cross_validation(read_dataset,
-                                                                                        activation_fun_names_layer_1,
-                                                                                        no_neurons_in_layer_1,
-                                                                                        activation_fun_names_layer_2,
-                                                                                        no_neurons_in_layer_2,
-                                                                                        val_loss,
-                                                                                        no_epochs_from_val_loss,
-                                                                                        loss_test_array)
+    thread.join()
+    single_val_loss, single_test_loss = thread.get_return()
 
     print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
     print("Training ends for:")
+    print("training set:" + training_set + " test set:" + test_set)
+    print(f'Layers name: {activation_fun_name_layer_1}, layers no {no_neurons_in_layer_1} | '
+          f'Layers name: {activation_fun_name_layer_2}, layers no {no_neurons_in_layer_2}')
+    print("validation accuracy:" + str(single_val_loss) + "test accuracy:" + str(single_test_loss))
+    print("Time:", datetime.now().strftime("%H:%M:%S"))
+
+    return single_val_loss, single_test_loss
+
+
+def make_training(training_set, test_set, activation_fun_names_layer_1, no_neurons_in_layer_1,
+                  activation_fun_names_layer_2, no_neurons_in_layer_2,
+                  ):
+
+    single_val_loss, single_test_loss = training_with_test(
+        training_set=training_set,
+        test_set=test_set,
+        activation_fun_name_layer_1=activation_fun_names_layer_1,
+        no_neurons_in_layer_1=no_neurons_in_layer_1,
+        activation_fun_name_layer_2=activation_fun_names_layer_2,
+        no_neurons_in_layer_2=no_neurons_in_layer_2,
+    )
+
+    print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+    print("Training ends for:")
+    print("training set:" + training_set + " test set:" + test_set)
     print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1} | '
           f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
-    print(val_loss_epochs_test)
+    print("validation accuracy:" + str(single_val_loss))
+    print("test accuracy:" + str(single_test_loss))
     print("Time:", datetime.now().strftime("%H:%M:%S"))
-    # Write to csv files and compute average for loss and number of epochs
-    write_to_csv(file_name, val_loss_epochs_test, no_of_layers)
 
-    return file_name, loss_test_array
+    return single_val_loss, single_test_loss
 
 
 def get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2,
@@ -231,29 +215,25 @@ def draw_plot(model):
     plt.show()
 
 
-def read_dataset(read_dataset):
-    test_dataset_numb = 20000
-    val_dataset_numb = 1000
-    dataset = pd.read_csv(read_dataset, names=["x1", "x2", "y"])
+def read_training_dataset(training_dataset):
+    val_dataset_numb = 20000
+    dataset = pd.read_csv(training_dataset, names=["x1", "x2", "y"])
     y_dataset = dataset.pop("y")
-    x_train, x_val, x_test = dataset[:-(val_dataset_numb+test_dataset_numb)], \
-                             dataset[-(val_dataset_numb+test_dataset_numb):-test_dataset_numb], \
-                             dataset[-test_dataset_numb:]
-    y_train, y_val, y_test = y_dataset[:-(val_dataset_numb+test_dataset_numb)], \
-                             y_dataset[-(val_dataset_numb+test_dataset_numb):-test_dataset_numb], \
-                             y_dataset[-test_dataset_numb:]
-    return x_train, x_val, x_test, y_train, y_val, y_test
+    x_train, x_val = dataset[:-val_dataset_numb], dataset[-val_dataset_numb:]
+    y_train, y_val = y_dataset[:-val_dataset_numb], y_dataset[-val_dataset_numb:]
+    return x_train, x_val, y_train, y_val
 
-def make_evaluation(model):
-    x_train, x_val, x_test, y_train, y_val, y_test = read_dataset(dataset_without_noise)
 
-    # preparation of training set
-    #input_test = tf.data.Dataset.from_tensor_slices(
-    #    (x_test.values.reshape([len(x_test), 2]), y_test.values))
-    #test_dataset = input_test.shuffle(len(y_test.values)).batch(no_batch_size)
+def read_test_dataset(test_dataset):
+    dataset = pd.read_csv(test_dataset, names=["x1", "x2", "y"])
+    return dataset
+
+
+def make_evaluation(model, test_set):
+    y_test_set = test_set.pop("y")
 
     loss_test = model.evaluate(
-        x=x_test, y=y_test, batch_size=None, verbose=1, sample_weight=None, steps=None,
+        x=test_set, y=y_test_set, batch_size=None, verbose=0, sample_weight=None, steps=None,
         callbacks=None, max_queue_size=10, workers=1, use_multiprocessing=False,
         return_dict=False
     )
@@ -263,7 +243,7 @@ def make_evaluation(model):
     return loss_test
 
 
-def make_model(read_dataset):
+def test_everything(test_set):
     # activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
     #activation_fun_names_1 = ["tanh"]
     #no_neurons_in_layer_1 = 2
@@ -291,37 +271,75 @@ def make_model(read_dataset):
     #         write_to_csv(average_file_name, average, no_of_layers)
 
     # Loops for nn with two layers
-    params=[("tanh", "tanh", 2, 2),
-            ("sigmoid", "sigmoid", 2, 2)]
+    params = [
+        ("sigmoid", "sigmoid", 65, 0),
+        ("tanh", "tanh", 45, 0),
+        ("elu", "elu", 140, 0),
+        ("swish", "swish", 80, 0),
+        ("sigmoid", "sigmoid", 45, 18),
+        ("tanh", "tanh", 50, 9),
+        ("elu", "elu", 12, 7),
+        ("swish", "swish", 3, 25),
+        ]
 
-    for activation_1,activation_2, neurons_1, neurons_2 in params:
-        val_loss = []
-        no_epochs_from_val_loss = []
-        loss_test_array = []
-        no_of_layers = 2
-        for x in range(5):
-            file_name, loss_test_array = make_training(read_dataset, activation_1,
-                                      neurons_1,
-                                      activation_2, neurons_2, val_loss,
-                                      no_epochs_from_val_loss, loss_test_array)
+    train_sets = [
+        ("dataset/dataset_noise_100000_005.csv", 0.005),
+        ("dataset/dataset_noise_100000_01.csv", 0.1),
+        ("dataset/dataset_noise_100000_1.csv", 1),
+        ("dataset/dataset_noise_100000_5.csv", 5),
+        ("dataset/dataset_noise_100000_10.csv", 10),
+        ("dataset/dataset_noise_100000_20.csv", 20),
+    ]
 
-        average_loss = get_avarge(val_loss)
-        std_dev_of_los = np.std(val_loss)
-        average_epochs = get_avarge(no_epochs_from_val_loss)
-        std_dev_of_epoch = np.std(no_epochs_from_val_loss)
-        average_loss_test = get_avarge(loss_test_array)
-        std_dev_of_los_test = np.std(loss_test_array)
-        average = [[average_loss, std_dev_of_los, int(average_epochs), std_dev_of_epoch,
-                    average_loss_test, std_dev_of_los_test, file_name]]
-        average_file_name = str(no_of_layers) + "_average"
-        write_to_csv(average_file_name, average, no_of_layers)
-#0.7093044519424438,78,0.7005310654640198
+    for activation_1, activation_2, neurons_1, neurons_2 in params:
+        best_ones = []
+        if neurons_2 == 0:
+            no_of_layers = 1
+        else:
+            no_of_layers = 2
+        for training_set, noise in train_sets:
+            val_loss = []
+            test_loss = []
+            for x in range(5):
+                single_val_loss, single_test_loss = training_with_test(
+                    training_set=training_set,
+                    test_set=test_set,
+                    activation_fun_name_layer_1=activation_1,
+                    no_neurons_in_layer_1=neurons_1,
+                    activation_fun_name_layer_2=activation_2,
+                    no_neurons_in_layer_2=neurons_2
+                )
+                val_loss.append(single_val_loss)
+                test_loss.append(single_test_loss)
+
+            minimal_test_loss_idx = test_loss.index(min(test_loss))
+            val_loss_of_best = val_loss[minimal_test_loss_idx]
+            test_loss_of_best = test_loss[minimal_test_loss_idx]
+            best_ones.append((noise, test_loss_of_best, val_loss_of_best))
+
+            print('------------------------------------------------------------------------')
+            print("Best result for:")
+            print("training set:" + training_set + " test set:" + test_set)
+            print(f'Layers name: {activation_1}, layers no {neurons_1} | '
+                  f'Layers name: {activation_2}, layers no {neurons_2}')
+            print("validation accuracy:" + str(val_loss_of_best))
+            print("test accuracy:" + str(test_loss_of_best))
+
+            file_name = str(no_of_layers) + "_" + \
+                        activation_1 + "_" + str(neurons_1) + "_" + \
+                        activation_2 + "_" + str(neurons_2) + "_noise_" + \
+                        str(noise)
+            write_to_csv(file_name, zip(val_loss, test_loss), no_of_layers)
+        file_name_for_best = str(no_of_layers) + "_" + \
+                        activation_1 + "_" + str(neurons_1) + "_" + \
+                        activation_2 + "_" + str(neurons_2) + "_best"
+        write_to_csv(file_name_for_best, best_ones, no_of_layers)
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-    #for neuron_network
     dataset_without_noise = "dataset/dataset_100000.csv"
-    make_model(dataset_without_noise)
+    test_everything(test_set=dataset_without_noise)
