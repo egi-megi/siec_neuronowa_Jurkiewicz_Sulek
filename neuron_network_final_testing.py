@@ -1,30 +1,10 @@
 import threading
 from datetime import datetime
-from itertools import chain
 
 import tensorflow as tf
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import csv
-from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
-import json
 from tensorflow.keras.regularizers import l2
-from sklearn.model_selection import KFold
-import os
-
-
-class ThreadSafePrinter:
-    def __init__(self):
-        self._lock = threading.Lock()
-
-    def print(self, metrics_name, score, val_loss_epochs):
-        with self._lock:
-            print('------------------------------------------------------------------------')
-            print(
-                f'Score: {metrics_name} of {score}')
-            print(val_loss_epochs)
 
 
 class SingleFoldThread(threading.Thread):
@@ -110,31 +90,6 @@ def training_with_test(training_set: str, test_set: str, activation_fun_name_lay
     return single_val_loss, single_test_loss
 
 
-def make_training(training_set, test_set, activation_fun_names_layer_1, no_neurons_in_layer_1,
-                  activation_fun_names_layer_2, no_neurons_in_layer_2,
-                  ):
-
-    single_val_loss, single_test_loss = training_with_test(
-        training_set=training_set,
-        test_set=test_set,
-        activation_fun_name_layer_1=activation_fun_names_layer_1,
-        no_neurons_in_layer_1=no_neurons_in_layer_1,
-        activation_fun_name_layer_2=activation_fun_names_layer_2,
-        no_neurons_in_layer_2=no_neurons_in_layer_2,
-    )
-
-    print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
-    print("Training ends for:")
-    print("training set:" + training_set + " test set:" + test_set)
-    print(f'Layers name: {activation_fun_names_layer_1}, layers no {no_neurons_in_layer_1} | '
-          f'Layers name: {activation_fun_names_layer_2}, layers no {no_neurons_in_layer_2}')
-    print("validation accuracy:" + str(single_val_loss))
-    print("test accuracy:" + str(single_test_loss))
-    print("Time:", datetime.now().strftime("%H:%M:%S"))
-
-    return single_val_loss, single_test_loss
-
-
 def get_compiled_model(activation_fun_names_layer_1, no_neurons_in_layer_1, activation_fun_names_layer_2,
                        no_neurons_in_layer_2):
     if no_neurons_in_layer_2 == 0:
@@ -180,41 +135,6 @@ def write_to_csv(file_name, val_loss, no_of_layers):
         writer.writerows(val_loss)
 
 
-def get_avarge(array):
-    y = 0
-    for x in array:
-        y = y + x
-    average = y / len(array)
-    return average
-
-
-def draw_plot(model):
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
-
-    # Make data.
-    X = np.arange(-10, 10, 0.1)
-    Y = np.arange(-10, 10, 0.1)
-    X, Y = np.meshgrid(X, Y)
-    grid = np.stack((X, Y))
-    grid = grid.T.reshape(-1, 2)
-
-    outs = model.predict(grid)
-    Z = outs.T[0].reshape(X.shape[0], X.shape[0])
-    # Plot the surface.
-    surf = ax.plot_surface(X, Y, Z, cmap=cm.autumn,
-                           linewidth=0, antialiased=False)
-    # Customize the z axis.
-    ax.set_zlim(-4, 4)
-    ax.elev = 10
-    ax.zaxis.set_major_locator(LinearLocator(10))
-    ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-    # Add a color bar which maps values to colors.
-    fig.colorbar(surf, shrink=0.5, aspect=5)
-    plt.savefig('3d_plot_out_of_nn_sigmoid_proba.pdf')
-    plt.show()
-
-
 def read_training_dataset(training_dataset):
     val_dataset_numb = 20000
     dataset = pd.read_csv(training_dataset, names=["x1", "x2", "y"])
@@ -244,33 +164,6 @@ def make_evaluation(model, test_set):
 
 
 def test_everything(test_set):
-    # activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
-    #activation_fun_names_1 = ["tanh"]
-    #no_neurons_in_layer_1 = 2
-
-    #activation_fun_names_2 = ["tanh"]
-    #no_neurons_in_layer_2 = 2
-
-    # Loops for nn with one layer
-    # for activation_fun_names_layer_1 in activation_fun_names_1:
-    #     for no_neurons_in_layer_1 in no_neurons_in_layer_1:
-    #         val_loss = []
-    #         no_epochs_from_val_loss = []
-    #         no_of_layers = 1
-    #         for x in range(5):
-    #         no_neurons_in_layer_2 = 0
-    #         activation_fun_names_layer_2 = "0"
-    #         file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
-    #                                   activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss,
-    #                                   no_epochs_from_val_loss)
-    #         average_loss = get_avarge(val_loss)
-    #         std_dev_of_los = np.std(val_loss)
-    #         average_epochs = get_avarge(no_epochs_from_val_loss)
-    #         average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
-    #         average_file_name = str(no_of_layers) + "_" + str(activation_fun_names_layer_1) + "_average"
-    #         write_to_csv(average_file_name, average, no_of_layers)
-
-    # Loops for nn with two layers
     params = [
         ("sigmoid", "sigmoid", 65, 0),
         ("tanh", "tanh", 45, 0),
@@ -312,9 +205,9 @@ def test_everything(test_set):
                 val_loss.append(single_val_loss)
                 test_loss.append(single_test_loss)
 
-            minimal_test_loss_idx = test_loss.index(min(test_loss))
-            val_loss_of_best = val_loss[minimal_test_loss_idx]
-            test_loss_of_best = test_loss[minimal_test_loss_idx]
+            minimal_val_loss_idx = val_loss.index(min(test_loss))
+            val_loss_of_best = val_loss[minimal_val_loss_idx]
+            test_loss_of_best = test_loss[minimal_val_loss_idx]
             best_ones.append((noise, test_loss_of_best, val_loss_of_best))
 
             print('------------------------------------------------------------------------')
@@ -336,8 +229,8 @@ def test_everything(test_set):
         write_to_csv(file_name_for_best, best_ones, no_of_layers)
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    # turn off CUDA support
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 

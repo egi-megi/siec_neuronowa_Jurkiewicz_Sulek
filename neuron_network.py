@@ -12,7 +12,6 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import json
 from tensorflow.keras.regularizers import l2
 from sklearn.model_selection import KFold
-import os
 
 
 class ThreadSafePrinter:
@@ -249,35 +248,44 @@ def read_dataset(dataset_without_noise):
 
 def make_model(dataset_without_noise):
     # activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
-    activation_fun_names_1 = ["tanh"]
+    activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
     no_neurons_in_layer_1 = list(chain(
-        range(2, 10, 1),
-        range(10, 21, 2)))
+        range(3, 10, 1),
+        range(10, 30, 2),
+        range(30, 80, 5),
+        range(80, 180, 10),
+        range(180, 360, 20)))
 
-    activation_fun_names_2 = ["tanh"]
-    no_neurons_in_layer_2 = list(chain(
+
+    # Loops for nn with one layer
+    for activation_fun_names_layer_1 in activation_fun_names_1:
+        for no_neurons_in_layer_1 in no_neurons_in_layer_1:
+            val_loss = []
+            no_epochs_from_val_loss = []
+            no_of_layers = 1
+            no_neurons_in_layer_2 = 0
+            activation_fun_names_layer_2 = "0"
+            file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
+                                      activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss,
+                                      no_epochs_from_val_loss)
+            average_loss = get_avarge(val_loss)
+            std_dev_of_los = np.std(val_loss)
+            average_epochs = get_avarge(no_epochs_from_val_loss)
+            average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
+            average_file_name = str(no_of_layers) + "_" + str(activation_fun_names_layer_1) + "_average"
+            write_to_csv(average_file_name, average, no_of_layers)
+
+    activation_fun_names_1 = ["sigmoid", "tanh", "elu", "swish"]
+    no_neurons_in_layer_1 = list(chain(
         range(3, 10, 1),
         range(10, 20, 2),
         range(20, 51, 5)))
 
-    # Loops for nn with one layer
-    # for activation_fun_names_layer_1 in activation_fun_names_1:
-    #     for no_neurons_in_layer_1 in no_neurons_in_layer_1:
-    #         val_loss = []
-    #         no_epochs_from_val_loss = []
-    #         no_of_layers = 1
-    #         for x in range(5):
-    #         no_neurons_in_layer_2 = 0
-    #         activation_fun_names_layer_2 = "0"
-    #         file_name = make_training(dataset_without_noise, activation_fun_names_layer_1, no_neurons_in_layer_1,
-    #                                   activation_fun_names_layer_2, no_neurons_in_layer_2, val_loss,
-    #                                   no_epochs_from_val_loss)
-    #         average_loss = get_avarge(val_loss)
-    #         std_dev_of_los = np.std(val_loss)
-    #         average_epochs = get_avarge(no_epochs_from_val_loss)
-    #         average = [[average_loss, std_dev_of_los, int(average_epochs), file_name]]
-    #         average_file_name = str(no_of_layers) + "_" + str(activation_fun_names_layer_1) + "_average"
-    #         write_to_csv(average_file_name, average, no_of_layers)
+    activation_fun_names_2 = ["sigmoid", "tanh", "elu", "swish"]
+    no_neurons_in_layer_2 = list(chain(
+        range(3, 10, 1),
+        range(10, 20, 2),
+        range(20, 51, 5)))
 
     # Loops for nn with two layers
     for activation_1 in activation_fun_names_1:
@@ -298,3 +306,12 @@ def make_model(dataset_without_noise):
                     average_file_name = str(no_of_layers) + "_" + str(activation_1) + "_" + \
                                         str(activation_2) + "_average"
                     write_to_csv(average_file_name, average, no_of_layers)
+
+
+if __name__ == '__main__':
+    # turn off CUDA support
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+    dataset_without_noise = "dataset/dataset_100000.csv"
+    make_model(dataset_without_noise)

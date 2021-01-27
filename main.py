@@ -1,4 +1,4 @@
-from neuron_netowrk import make_model
+from neuron_network import make_model
 #from RBF_model import *
 
 
