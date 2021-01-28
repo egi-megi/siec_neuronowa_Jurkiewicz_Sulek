@@ -29,7 +29,7 @@ class ThreadSafePrinter:
 
 class SingleFoldThread(threading.Thread):
     def __init__(self, train_set, val_set, activation_fun_layer_1, activation_fun_layer_2, neurons_layer_1,
-                 neurons_layer_2, printer: ThreadSafePrinter):
+                 neurons_layer_2, printer: ThreadSafePrinter, test_x, test_y):
         threading.Thread.__init__(self)
         self.train = train_set
         self.valid = val_set
@@ -42,6 +42,8 @@ class SingleFoldThread(threading.Thread):
         self.val_loss = None
         self.no_epochs_from_val_loss = None
         self.test_loss = None
+        self.test_x = test_x
+        self.test_y = test_y
 
     def run(self):
         no_epochs = 500
@@ -57,7 +59,7 @@ class SingleFoldThread(threading.Thread):
                             verbose=verbosity, validation_data=self.valid)
 
         scores = model.evaluate(self.valid, verbose=0)
-        test_scores = make_evaluation(model)
+        test_scores = make_evaluation(model, self.test_x, self.test_y)
 
         self.val_loss_epochs_test = [scores[0], len(history.history['loss']), test_scores[0]]
         self.val_loss = scores[0]
@@ -103,7 +105,7 @@ def training_with_cross_validation(dataset_without_noise, activation_fun_names_l
                               activation_fun_layer_1=activation_fun_names_layer_1,
                               activation_fun_layer_2=activation_fun_names_layer_2,
                               neurons_layer_1=no_neurons_in_layer_1, neurons_layer_2=no_neurons_in_layer_2,
-                              printer=printer)
+                              printer=printer, test_x=x_test, test_y=y_test)
     threads.append(thread)
     thread.start()
 
@@ -244,8 +246,9 @@ def read_dataset(read_dataset):
                              y_dataset[-test_dataset_numb:]
     return x_train, x_val, x_test, y_train, y_val, y_test
 
-def make_evaluation(model):
-    x_train, x_val, x_test, y_train, y_val, y_test = read_dataset(dataset_without_noise)
+
+def make_evaluation(model, x_test, y_test):
+    # x_train, x_val, x_test, y_train, y_val, y_test = read_dataset(dataset_without_noise)
 
     # preparation of training set
     #input_test = tf.data.Dataset.from_tensor_slices(
@@ -291,14 +294,26 @@ def make_model(read_dataset):
     #         write_to_csv(average_file_name, average, no_of_layers)
 
     # Loops for nn with two layers
-    params=[("tanh", "tanh", 2, 2),
-            ("sigmoid", "sigmoid", 2, 2)]
+    # params=[("tanh", "tanh", 50, 9),
+    #         ("sigmoid", "sigmoid", 45, 18),
+    #         ("elu", "elu", 12, 7),
+    #         ("swish", "swish", 3, 25)
+    #         ]
 
-    for activation_1,activation_2, neurons_1, neurons_2 in params:
+    params = [("tanh", "tanh", 45, 0),
+              ("sigmoid", "sigmoid", 65, 0),
+              ("elu", "elu", 140, 0),
+              ("swish", "swish", 80, 0)
+              ]
+
+    for activation_1, activation_2, neurons_1, neurons_2 in params:
         val_loss = []
         no_epochs_from_val_loss = []
         loss_test_array = []
-        no_of_layers = 2
+        if neurons_2 == 0:
+            no_of_layers = 1
+        else:
+            no_of_layers = 2
         for x in range(5):
             file_name, loss_test_array = make_training(read_dataset, activation_1,
                                       neurons_1,
@@ -315,7 +330,7 @@ def make_model(read_dataset):
                     average_loss_test, std_dev_of_los_test, file_name]]
         average_file_name = str(no_of_layers) + "_average"
         write_to_csv(average_file_name, average, no_of_layers)
-#0.7093044519424438,78,0.7005310654640198
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
