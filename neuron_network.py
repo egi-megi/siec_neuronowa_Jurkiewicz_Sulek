@@ -12,6 +12,7 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import json
 from tensorflow.keras.regularizers import l2
 from sklearn.model_selection import KFold
+import os
 
 
 class ThreadSafePrinter:
